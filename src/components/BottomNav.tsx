@@ -17,10 +17,12 @@ export const BottomNav: React.FC = () => {
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = currentView === item.id;
+        const labels: Record<ViewState, string> = { voice: 'Voice', projects: 'Projects', backlog: 'Backlog', timer: 'Timer' };
         
         return (
           <button
             key={item.id}
+            aria-label={labels[item.id]}
             onClick={() => setCurrentView(item.id)}
             className={`flex flex-col items-center justify-center w-14 h-14 rounded-full transition-all duration-300 ease-in-out ${
               isActive 

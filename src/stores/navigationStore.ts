@@ -15,7 +15,7 @@ export const useNavigationStore = create<NavigationState>((set) => ({
   currentView: 'backlog', // Start on backlog by default
   setCurrentView: (view) => set({ currentView: view }),
   activeEpicId: null,
-  setActiveEpicId: (id) => set({ activeEpicId: id, currentView: 'timer' }), // Auto-switch to timer
+  setActiveEpicId: (id) => set(id ? { activeEpicId: id, currentView: 'timer' } : { activeEpicId: null }),
   selectedEpicDetailId: null,
   setSelectedEpicDetailId: (id) => set({ selectedEpicDetailId: id }),
 }));

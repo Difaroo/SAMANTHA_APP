@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useEntityStore } from '../stores/entityStore';
 import { useNavigationStore } from '../stores/navigationStore';
 import { Settings, Play, Square } from 'lucide-react';
@@ -55,38 +55,32 @@ export const SprintTimerView: React.FC = () => {
 
   const currentPhase = phases[currentPhaseIndex];
 
+  // Timer tick — only depends on isRunning, uses functional setState
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    
-    if (isRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    } else if (isRunning && timeLeft === 0) {
-      // Phase Transition
-      triggerPhaseTransition();
-    }
-
+    if (!isRunning) return;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => Math.max(0, prev - 1));
+    }, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft]);
+  }, [isRunning]);
 
-  const triggerPhaseTransition = async () => {
-    // Attempt audio playback
+  // Phase transition — triggered when timeLeft hits 0
+  const triggerPhaseTransition = useCallback(() => {
+    // Attempt audio playback (fire-and-forget, don't block phase transition)
     if (audioRef.current) {
-      try {
-        await audioRef.current.play();
-      } catch (err) {
-        console.error("Audio playback failed (Autoplay policy). Triggering visual fallback.", err);
-        triggerVisualFlash();
-      }
+      audioRef.current.play().catch(() => triggerVisualFlash());
     } else {
       triggerVisualFlash();
     }
 
     // Move to next phase
     if (currentPhaseIndex < phases.length - 1) {
-      setCurrentPhaseIndex(prev => prev + 1);
-      setTimeLeft(phases[currentPhaseIndex + 1].durationSeconds);
+      const nextIndex = currentPhaseIndex + 1;
+      const nextPhase = phases[nextIndex];
+      if (nextPhase) {
+        setCurrentPhaseIndex(nextIndex);
+        setTimeLeft(nextPhase.durationSeconds);
+      }
     } else {
       // Cycle complete
       setIsRunning(false);
@@ -94,7 +88,14 @@ export const SprintTimerView: React.FC = () => {
       setTimeLeft(phases[0].durationSeconds);
       setHasStarted(false);
     }
-  };
+  }, [currentPhaseIndex, phases]);
+
+  // Watch for phase transition
+  useEffect(() => {
+    if (isRunning && timeLeft === 0) {
+      triggerPhaseTransition();
+    }
+  }, [isRunning, timeLeft, triggerPhaseTransition]);
 
   const triggerVisualFlash = () => {
     setVisualFlash(true);
@@ -151,11 +152,14 @@ export const SprintTimerView: React.FC = () => {
                 type="number" 
                 value={Math.floor(p.durationSeconds / 60)} 
                 onChange={(e) => {
-                  const newPhases = [...phases];
-                  newPhases[idx].durationSeconds = parseInt(e.target.value) * 60;
+                  const val = parseInt(e.target.value);
+                  if (isNaN(val) || val < 1) return;
+                  const newPhases = phases.map((p, i) => 
+                    i === idx ? { ...p, durationSeconds: val * 60 } : p
+                  );
                   setPhases(newPhases);
                   if (idx === currentPhaseIndex && !isRunning) {
-                    setTimeLeft(parseInt(e.target.value) * 60);
+                    setTimeLeft(val * 60);
                   }
                 }}
                 className="w-full mt-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-sm"
@@ -217,8 +221,7 @@ export const SprintTimerView: React.FC = () => {
           
           <button 
             onClick={() => {
-              setTimeLeft(1); // Dev shortcut to skip to next phase
-              setIsRunning(true);
+              triggerPhaseTransition();
             }}
             className="px-4 py-4 rounded-full bg-white/5 border border-white/10 text-muted-foreground hover:text-white transition-all text-xs font-mono"
             title="Dev Skip"

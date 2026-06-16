@@ -36,13 +36,13 @@ const GlobalVoiceIndicator: React.FC = () => {
   );
 };
 
+const views: ViewState[] = ['voice', 'projects', 'backlog', 'timer'];
+
 const ViewContainer: React.FC = () => {
   const { currentView, setCurrentView } = useNavigationStore();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // Add a ref to avoid infinite loops during programmatic scrolling
   const isProgrammaticScroll = useRef(false);
-
-  const views: ViewState[] = ['voice', 'projects', 'backlog', 'timer'];
   
   // Programmatic scroll when BottomNav changes currentView
   useEffect(() => {
@@ -104,10 +104,10 @@ const ViewContainer: React.FC = () => {
           <VoiceControlView />
         </div>
         <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
-          <BacklogView />
+          <ProjectsView />
         </div>
         <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
-          <ProjectsView />
+          <BacklogView />
         </div>
         <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
           <SprintTimerView />

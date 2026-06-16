@@ -4,6 +4,7 @@ import { useVoiceStore } from '../stores/voiceStore';
 import { startVoiceService, stopVoiceService, onDisconnectTapped } from '../services/foregroundService';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
+if (!API_BASE) console.warn('[Voice] VITE_API_BASE not set — API calls will use relative URLs (only works with Vite dev proxy)');
 
 export const VoiceControlView: React.FC = () => {
   const { isVoiceConnected: connected, setIsVoiceConnected, setStatusText: setGlobalStatusText } = useVoiceStore();
@@ -14,6 +15,7 @@ export const VoiceControlView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const roomRef = useRef<any>(null);
+  const wakeLockRef = useRef<any>(null);
   const subtitlesContainerRef = useRef<HTMLDivElement>(null);
   const [subtitles, setSubtitles] = useState<{id: string, text: string, timestamp: number, speaker: "you" | "samantha"}[]>([]);
 
@@ -51,6 +53,20 @@ export const VoiceControlView: React.FC = () => {
     return cleanup;
   }, [setIsVoiceConnected]);
 
+  // Cleanup room and wake lock on unmount
+  useEffect(() => {
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+      if (roomRef.current) {
+        roomRef.current.disconnect();
+        roomRef.current = null;
+      }
+    };
+  }, []);
+
   const toggleConnect = useCallback(async () => {
     if (connected && roomRef.current) {
       roomRef.current.localParticipant?.tracks.forEach((pub: any) => {
@@ -60,6 +76,10 @@ export const VoiceControlView: React.FC = () => {
         }
       });
       roomRef.current.disconnect();
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
       stopVoiceService();
       setIsVoiceConnected(false);
       setStatus("");
@@ -141,7 +161,7 @@ export const VoiceControlView: React.FC = () => {
                   const last = updated[updated.length - 1];
                   updated[updated.length - 1] = { ...last, text: last.text + " " + cleanText, timestamp: Date.now() };
                 } else {
-                  updated.push({ id: Date.now().toString(), text: cleanText, timestamp: Date.now(), speaker });
+                  updated.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, text: cleanText, timestamp: Date.now(), speaker });
                 }
                 return updated.slice(-10);
               });
@@ -152,8 +172,8 @@ export const VoiceControlView: React.FC = () => {
         }
       });
 
-      await room.startAudio();
       await room.connect(data.serverUrl, data.token);
+      await room.startAudio();
       roomRef.current = room;
 
       const mic = await createLocalAudioTrack({
@@ -170,7 +190,7 @@ export const VoiceControlView: React.FC = () => {
       // Android WebView Keep-Alive Hacks
       try {
         if ("wakeLock" in navigator) {
-          await (navigator as any).wakeLock.request("screen");
+          wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
         }
       } catch (e) {}
 

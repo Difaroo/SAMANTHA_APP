@@ -26,3 +26,5 @@ ios/App/Pods/
 # OS
 .DS_Store
 Thumbs.db
+test-results/
+playwright-report/

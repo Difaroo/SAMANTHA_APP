@@ -94,13 +94,15 @@ export const BacklogView: React.FC = () => {
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
-      setEpics(
-        (() => {
-          const oldIndex = epics.findIndex(i => i.id === active.id);
-          const newIndex = epics.findIndex(i => i.id === over.id);
-          return arrayMove(epics, oldIndex, newIndex);
-        })()
-      );
+      // Reorder only within backlog epics, then merge back into full array
+      const oldIndex = backlogEpics.findIndex(i => i.id === active.id);
+      const newIndex = backlogEpics.findIndex(i => i.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+      
+      const reordered = arrayMove(backlogEpics, oldIndex, newIndex);
+      // Rebuild full epics: non-backlog epics stay in place, backlog epics use new order
+      const nonBacklog = epics.filter(e => !e.inGlobalBacklog);
+      setEpics([...nonBacklog, ...reordered]);
     }
   };
 

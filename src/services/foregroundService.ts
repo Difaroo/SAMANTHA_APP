@@ -64,17 +64,19 @@ export const stopVoiceService = async () => {
 export const onDisconnectTapped = (callback: () => void): (() => void) => {
   if (Capacitor.getPlatform() !== 'android') return () => {};
 
-  let cleanup = () => {};
+  // Mutable state object so cleanup can signal cancellation to pending async
+  const state = { removed: false, removeListener: () => {} };
 
   getForegroundService().then((ForegroundService) => {
-    if (!ForegroundService) return;
+    if (!ForegroundService || state.removed) return;
     const listener = ForegroundService.addListener('buttonClicked', (event: { buttonId: number }) => {
-      if (event.buttonId === 1) {
-        callback();
-      }
+      if (event.buttonId === 1) callback();
     });
-    cleanup = () => listener.remove();
+    state.removeListener = () => listener.remove();
   });
 
-  return () => cleanup();
+  return () => {
+    state.removed = true;
+    state.removeListener();
+  };
 };
