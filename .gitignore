@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+
+# Android native build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/app/.cxx/
+android/local.properties
+
+# iOS (future)
+ios/App/Pods/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

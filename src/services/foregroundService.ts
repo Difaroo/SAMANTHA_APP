@@ -1,0 +1,80 @@
+import { Capacitor } from '@capacitor/core';
+
+/**
+ * Foreground Service wrapper for Android.
+ * Keeps the LiveKit WebRTC connection alive when the screen is off
+ * or the app is backgrounded by registering as a microphone-type
+ * foreground service (same mechanism as phone calls / Spotify).
+ */
+
+let foregroundServiceModule: any = null;
+
+const getForegroundService = async () => {
+  if (foregroundServiceModule) return foregroundServiceModule;
+  try {
+    const mod = await import('@capawesome-team/capacitor-android-foreground-service');
+    foregroundServiceModule = mod.ForegroundService;
+    return foregroundServiceModule;
+  } catch {
+    console.warn('[ForegroundService] Plugin not available on this platform');
+    return null;
+  }
+};
+
+export const startVoiceService = async () => {
+  if (Capacitor.getPlatform() !== 'android') return;
+
+  const ForegroundService = await getForegroundService();
+  if (!ForegroundService) return;
+
+  try {
+    await ForegroundService.startForegroundService({
+      id: 9001,
+      title: 'Samantha — Connected',
+      body: 'Voice conversation active',
+      smallIcon: 'ic_stat_samantha',
+      buttons: [
+        { id: 1, title: 'Disconnect' },
+      ],
+    });
+    console.log('[ForegroundService] Started');
+  } catch (err) {
+    console.error('[ForegroundService] Failed to start:', err);
+  }
+};
+
+export const stopVoiceService = async () => {
+  if (Capacitor.getPlatform() !== 'android') return;
+
+  const ForegroundService = await getForegroundService();
+  if (!ForegroundService) return;
+
+  try {
+    await ForegroundService.stopForegroundService();
+    console.log('[ForegroundService] Stopped');
+  } catch (err) {
+    console.error('[ForegroundService] Failed to stop:', err);
+  }
+};
+
+/**
+ * Listen for notification button taps.
+ * Returns a cleanup function to remove the listener.
+ */
+export const onDisconnectTapped = (callback: () => void): (() => void) => {
+  if (Capacitor.getPlatform() !== 'android') return () => {};
+
+  let cleanup = () => {};
+
+  getForegroundService().then((ForegroundService) => {
+    if (!ForegroundService) return;
+    const listener = ForegroundService.addListener('buttonClicked', (event: { buttonId: number }) => {
+      if (event.buttonId === 1) {
+        callback();
+      }
+    });
+    cleanup = () => listener.remove();
+  });
+
+  return () => cleanup();
+};
