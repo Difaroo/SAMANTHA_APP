@@ -1,48 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { useEntityStore, type Epic } from '../stores/entityStore';
+import React, { useState } from 'react';
+import { useEntityStore, type Epic, type Project } from '../stores/entityStore';
 import { useNavigationStore } from '../stores/navigationStore';
 import { X, Edit2, Save } from 'lucide-react';
 
-export const EpicDetailView: React.FC = () => {
-  const { epics, updateEpic, projects } = useEntityStore();
-  const { selectedEpicDetailId, setSelectedEpicDetailId } = useNavigationStore();
-  
-  const selectedEpicDetail = epics.find(e => e.id === selectedEpicDetailId) || null;
+type TaskDetailDialogProps = {
+  epic: Epic;
+  project: Project | undefined;
+  onSave: (epic: Epic) => void;
+  onClose: () => void;
+};
+
+const TaskDetailDialog: React.FC<TaskDetailDialogProps> = ({ epic, project, onSave, onClose }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedEpic, setEditedEpic] = useState<Epic | null>(null);
-
-  useEffect(() => {
-    if (selectedEpicDetail) {
-      setEditedEpic(selectedEpicDetail);
-      setIsEditing(false);
-    }
-  }, [selectedEpicDetail]);
-
-  if (!selectedEpicDetail || !editedEpic) return null;
+  const [editedEpic, setEditedEpic] = useState(epic);
+  const projectName = project?.name || 'Unknown Project';
 
   const handleSave = () => {
-    updateEpic(editedEpic);
+    onSave(editedEpic);
     setIsEditing(false);
   };
 
   const handleObjectivesChange = (text: string) => {
     const objectives = text.split('\n').filter(line => line.trim().length > 0);
-    setEditedEpic({ ...editedEpic, objectives });
+    setEditedEpic({ ...editedEpic, objectives, prompt: objectives.map((objective) => `- ${objective}`).join('\n') });
   };
 
-  const projectName = projects.find(p => p.id === editedEpic.projectId)?.name || 'Unknown Project';
-
   return (
-    <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex flex-col p-6 animate-in fade-in slide-in-from-bottom-8 duration-300">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Task detail"
+      className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex flex-col p-6 animate-in fade-in slide-in-from-bottom-8 duration-300"
+    >
       <div className="max-w-3xl w-full mx-auto flex flex-col h-full">
         <header className="flex justify-between items-start mb-8 pt-8">
           <div className="flex-1 mr-8">
             <div className="text-xs font-mono text-primary uppercase tracking-widest mb-2">
-              {projectName}
+              Task detail · {projectName}
             </div>
             {isEditing ? (
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={editedEpic.title}
                 onChange={e => setEditedEpic({ ...editedEpic, title: e.target.value })}
                 className="w-full text-3xl font-bold text-white leading-tight bg-white/5 border border-primary/50 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
@@ -51,26 +49,27 @@ export const EpicDetailView: React.FC = () => {
               <h1 className="text-3xl font-bold text-white leading-tight">{editedEpic.title}</h1>
             )}
           </div>
-          
+
           <div className="flex gap-2">
             {isEditing ? (
-              <button 
+              <button
                 onClick={handleSave}
                 className="flex items-center px-4 py-2 rounded-full bg-primary hover:bg-primary/90 text-white transition-colors glow-border shadow-[0_0_15px_hsl(var(--primary)/0.4)]"
               >
                 <Save size={18} className="mr-2" /> Save
               </button>
             ) : (
-              <button 
+              <button
                 onClick={() => setIsEditing(true)}
                 className="flex items-center px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
               >
                 <Edit2 size={18} className="mr-2" /> Edit
               </button>
             )}
-            
-            <button 
-              onClick={() => setSelectedEpicDetailId(null)}
+
+            <button
+              aria-label="Close task detail"
+              onClick={onClose}
               className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
             >
               <X size={24} />
@@ -82,7 +81,7 @@ export const EpicDetailView: React.FC = () => {
           <section>
             <h3 className="text-sm font-medium text-white mb-2 uppercase tracking-wide border-b border-white/10 pb-2">Abstract</h3>
             {isEditing ? (
-              <textarea 
+              <textarea
                 value={editedEpic.description}
                 onChange={e => setEditedEpic({ ...editedEpic, description: e.target.value })}
                 className="w-full h-32 text-lg text-white leading-relaxed bg-white/5 border border-primary/50 rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
@@ -95,12 +94,12 @@ export const EpicDetailView: React.FC = () => {
           </section>
 
           <section>
-            <h3 className="text-sm font-medium text-white mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Prompt & Objectives</h3>
+            <h3 className="text-sm font-medium text-white mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Prompt & Outcomes</h3>
             {isEditing ? (
-              <textarea 
+              <textarea
                 value={editedEpic.objectives.join('\n')}
                 onChange={e => handleObjectivesChange(e.target.value)}
-                placeholder="Enter each objective on a new line..."
+                placeholder="Enter each outcome on a new line..."
                 className="w-full h-48 font-mono text-sm text-white bg-white/5 border border-primary/50 rounded-xl p-4 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               />
             ) : (
@@ -119,5 +118,23 @@ export const EpicDetailView: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+export const EpicDetailView: React.FC = () => {
+  const { epics, updateEpic, projects } = useEntityStore();
+  const { selectedEpicDetailId, setSelectedEpicDetailId } = useNavigationStore();
+  const selectedEpicDetail = epics.find(e => e.id === selectedEpicDetailId);
+
+  if (!selectedEpicDetail) return null;
+
+  return (
+    <TaskDetailDialog
+      key={selectedEpicDetail.id}
+      epic={selectedEpicDetail}
+      project={projects.find(p => p.id === selectedEpicDetail.projectId)}
+      onSave={updateEpic}
+      onClose={() => setSelectedEpicDetailId(null)}
+    />
   );
 };

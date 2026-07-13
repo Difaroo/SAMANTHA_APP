@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { mockPrismSeed } from './helpers';
 
 test.describe('Sprint Timer View', () => {
   test.beforeEach(async ({ page }) => {
+    await mockPrismSeed(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Timer' }).click();
     await expect(page.getByText('Psionic Membrane')).toBeVisible({ timeout: 3000 });

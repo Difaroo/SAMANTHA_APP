@@ -17,7 +17,7 @@ export const BottomNav: React.FC = () => {
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = currentView === item.id;
-        const labels: Record<ViewState, string> = { voice: 'Voice', projects: 'Projects', backlog: 'Backlog', timer: 'Timer' };
+        const labels: Record<ViewState, string> = { voice: 'Voice', projects: 'Projects', backlog: 'Next', timer: 'Timer' };
         
         return (
           <button

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEntityStore, type Project, type Epic } from '../stores/entityStore';
 import { useNavigationStore } from '../stores/navigationStore';
+import { isEpicInNext, rankForIndex } from '../sync/contract';
 import { ArrowLeft, GripVertical, Plus, CheckCircle2 } from 'lucide-react';
-import { 
-  DndContext, 
+import {
+  DndContext,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
@@ -38,8 +39,8 @@ const SortableProjectCard: React.FC<{ project: Project; onSelect: (id: string) =
         isDragging ? 'border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] bg-white/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
       } transition-colors group`}
     >
-      <div 
-        {...attributes} 
+      <div
+        {...attributes}
         {...listeners}
         onClick={(e) => e.stopPropagation()}
         className="px-2 text-muted-foreground hover:text-white cursor-grab active:cursor-grabbing"
@@ -48,7 +49,7 @@ const SortableProjectCard: React.FC<{ project: Project; onSelect: (id: string) =
       </div>
       <div className="flex-1 px-4">
         <h3 className="text-xl font-medium text-white mb-1 group-hover:text-primary transition-colors">{project.name}</h3>
-        <p className="text-sm text-muted-foreground">{epicCount} Epics</p>
+        <p className="text-sm text-muted-foreground">{epicCount} Tasks</p>
       </div>
     </div>
   );
@@ -74,17 +75,17 @@ const SortableProjectEpic: React.FC<{ epic: Epic; onSelect: (id: string) => void
         <h4 className="text-sm font-medium text-white">{epic.title}</h4>
       </div>
       <div className="px-2">
-        {epic.inGlobalBacklog ? (
-          <div className="flex items-center text-xs text-green-400 font-mono" title="In Global Backlog">
+        {isEpicInNext(epic) ? (
+          <div className="flex items-center text-xs text-green-400 font-mono" title="In Next">
             <CheckCircle2 size={16} className="mr-1" />
-            BACKLOG
+            NEXT
           </div>
         ) : (
-          <button 
+          <button
             onClick={(e) => { e.stopPropagation(); onAdd(epic.id); }}
             className="flex items-center px-3 py-1 rounded bg-white/10 hover:bg-primary/20 hover:text-primary text-xs text-white transition-colors border border-white/10 hover:border-primary/50"
           >
-            <Plus size={14} className="mr-1" /> Add to Backlog
+            <Plus size={14} className="mr-1" /> Add to Next
           </button>
         )}
       </div>
@@ -93,18 +94,47 @@ const SortableProjectEpic: React.FC<{ epic: Epic; onSelect: (id: string) => void
 };
 
 export const ProjectsView: React.FC = () => {
-  const { projects, setProjects, epics, setEpics } = useEntityStore();
+  const { projects, setProjects, epics, setEpics, _hasHydrated } = useEntityStore();
   const { setSelectedEpicDetailId } = useNavigationStore();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-
-  const addToGlobalBacklog = (id: string) => {
-    setEpics(epics.map(e => e.id === id ? { ...e, inGlobalBacklog: true } : e));
-  };
-
+  const [isReady, setIsReady] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+
+  useEffect(() => {
+    if (_hasHydrated) {
+      // Give SyncManager a tick to complete its fetch
+      const timer = setTimeout(() => setIsReady(true), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [_hasHydrated]);
+
+  if (_hasHydrated && !isReady) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
+        <p className="text-sm">Syncing with Prism&hellip;</p>
+      </div>
+    );
+  }
+
+  if (!_hasHydrated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
+        <p className="text-sm">Loading&hellip;</p>
+      </div>
+    );
+  }
+
+  const addToGlobalBacklog = (id: string) => {
+    const nextCount = epics.filter(isEpicInNext).length;
+    setEpics(epics.map(e => e.id === id
+      ? { ...e, nextRank: rankForIndex(nextCount), inGlobalBacklog: true }
+      : e));
+  };
 
   const handleProjectDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -120,11 +150,19 @@ export const ProjectsView: React.FC = () => {
   const handleEpicDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      setEpics((() => {
-        const oldIndex = epics.findIndex(i => i.id === active.id);
-        const newIndex = epics.findIndex(i => i.id === over.id);
-        return arrayMove(epics, oldIndex, newIndex);
-      })());
+      const projectEpics = epics.filter(e => e.projectId === selectedProjectId);
+      const oldIndex = projectEpics.findIndex(i => i.id === active.id);
+      const newIndex = projectEpics.findIndex(i => i.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reorderedProjectEpics = arrayMove(projectEpics, oldIndex, newIndex);
+      let projectEpicIndex = 0;
+      setEpics(epics.map((epic) => {
+        if (epic.projectId !== selectedProjectId) return epic;
+        const reordered = reorderedProjectEpics[projectEpicIndex];
+        projectEpicIndex += 1;
+        return reordered;
+      }));
     }
   };
 
@@ -134,23 +172,49 @@ export const ProjectsView: React.FC = () => {
 
     return (
       <div className="flex flex-col h-full w-full max-w-3xl mx-auto p-6">
-        <header className="mb-6 flex items-center pt-4">
-          <button onClick={() => setSelectedProjectId(null)} className="p-2 mr-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors">
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h2 className="text-2xl font-bold text-white leading-tight">{project?.name}</h2>
-            <p className="text-xs text-muted-foreground mt-1">{project?.description}</p>
+        <header className="mb-6 flex items-center justify-between pt-4">
+          <div className="flex items-center">
+            <button onClick={() => setSelectedProjectId(null)} className="p-2 mr-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-white leading-tight">{project?.name}</h2>
+              <p className="text-xs text-muted-foreground mt-1">{project?.description}</p>
+            </div>
           </div>
+          <button
+            onClick={() => {
+              const newId = `new-epic-${Date.now()}`;
+              setEpics([...epics, {
+                id: newId,
+                projectId: selectedProjectId,
+                title: 'New Task',
+                description: '',
+                prompt: '',
+                objectives: [],
+                done: false,
+                status: 'draft',
+                impact: 5,
+                effort: 5,
+                created: new Date().toISOString(),
+                nextRank: null,
+                inGlobalBacklog: false
+              }]);
+              setSelectedEpicDetailId(newId);
+            }}
+            className="flex items-center px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors"
+          >
+            <Plus size={18} className="mr-1" /> Add Task
+          </button>
         </header>
-        
+
         <div className="flex-1 overflow-y-auto pb-24 no-scrollbar">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleEpicDragEnd}>
             <SortableContext items={projectEpics.map(e => e.id)} strategy={verticalListSortingStrategy}>
               {projectEpics.map(epic => (
-                <SortableProjectEpic 
-                  key={epic.id} 
-                  epic={epic} 
+                <SortableProjectEpic
+                  key={epic.id}
+                  epic={epic}
                   onSelect={setSelectedEpicDetailId}
                   onAdd={addToGlobalBacklog}
                 />
@@ -166,16 +230,16 @@ export const ProjectsView: React.FC = () => {
     <div className="flex flex-col h-full p-6 pb-24 max-w-3xl mx-auto w-full">
       <header className="mb-8 pt-4">
         <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Projects</h1>
-        <p className="text-muted-foreground">Reorder projects or select one to manage its To-Do Epics.</p>
+        <p className="text-muted-foreground">Reorder projects or select one to manage its tasks.</p>
       </header>
-      
+
       <div className="flex-1 overflow-y-auto pr-2 no-scrollbar">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
           <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
             {projects.map((p) => (
-              <SortableProjectCard 
-                key={p.id} 
-                project={p} 
+              <SortableProjectCard
+                key={p.id}
+                project={p}
                 onSelect={setSelectedProjectId}
                 epicCount={epics.filter(e => e.projectId === p.id).length}
               />

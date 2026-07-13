@@ -7,6 +7,9 @@ import { BacklogView } from './views/BacklogView';
 import { ProjectsView } from './views/ProjectsView';
 import { SprintTimerView } from './views/SprintTimerView';
 import { EpicDetailView } from './views/EpicDetailView';
+import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { useEntityStore } from './stores/entityStore';
+import { SyncManager } from './services/syncManager';
 
 // Helper component for the indicator
 const GlobalVoiceIndicator: React.FC = () => {
@@ -33,6 +36,31 @@ const GlobalVoiceIndicator: React.FC = () => {
       <span className="text-xs font-semibold tracking-widest uppercase">{statusText || 'Active'}</span>
       <span className="text-xs font-mono">{elapsed}</span>
     </div>
+  );
+};
+
+const SyncStatusIndicator: React.FC = () => {
+  const { syncPhase, syncMessage, outbox } = useEntityStore();
+  const offline = syncPhase === 'offline' || syncPhase === 'error' || syncPhase === 'conflict';
+  const label = syncPhase === 'synced' ? 'Synced' :
+    syncPhase === 'syncing' ? 'Syncing' :
+    offline ? 'Offline' :
+    outbox.length ? `${outbox.length} pending` : 'Connecting';
+  const Icon = offline ? CloudOff : syncPhase === 'syncing' ? RefreshCw : Cloud;
+
+  return (
+    <button
+      type="button"
+      aria-label="Sync with PRISM"
+      title={syncMessage || label}
+      onClick={() => void SyncManager.syncNow()}
+      className={`fixed top-2 left-4 z-[100] flex h-7 items-center gap-1.5 text-[10px] font-mono ${
+        offline ? 'text-red-300' : syncPhase === 'synced' ? 'text-emerald-300' : 'text-amber-200'
+      }`}
+    >
+      <Icon size={13} className={syncPhase === 'syncing' ? 'animate-spin' : ''} />
+      <span>{label}</span>
+    </button>
   );
 };
 
@@ -88,10 +116,11 @@ const ViewContainer: React.FC = () => {
       <div className="absolute bottom-0 left-0 right-0 h-[30%] pointer-events-none z-0 bg-gradient-to-t from-primary/15 to-transparent"></div>
 
       <GlobalVoiceIndicator />
+      <SyncStatusIndicator />
 
       {/* Snap Container */}
       <div className="fixed top-2 right-4 text-[10px] font-mono text-muted-foreground/50 z-[100] pointer-events-none tracking-widest">
-        v2.3.0
+        v2.4.0
       </div>
 
       <div 
@@ -124,5 +153,9 @@ const ViewContainer: React.FC = () => {
 };
 
 export default function App() {
+  useEffect(() => {
+    SyncManager.init();
+  }, []);
+
   return <ViewContainer />;
 }

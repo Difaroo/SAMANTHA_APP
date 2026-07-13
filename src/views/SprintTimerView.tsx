@@ -55,14 +55,10 @@ export const SprintTimerView: React.FC = () => {
 
   const currentPhase = phases[currentPhaseIndex];
 
-  // Timer tick — only depends on isRunning, uses functional setState
-  useEffect(() => {
-    if (!isRunning) return;
-    const interval = setInterval(() => {
-      setTimeLeft(prev => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isRunning]);
+  const triggerVisualFlash = useCallback(() => {
+    setVisualFlash(true);
+    setTimeout(() => setVisualFlash(false), 1500);
+  }, []);
 
   // Phase transition — triggered when timeLeft hits 0
   const triggerPhaseTransition = useCallback(() => {
@@ -88,19 +84,22 @@ export const SprintTimerView: React.FC = () => {
       setTimeLeft(phases[0].durationSeconds);
       setHasStarted(false);
     }
-  }, [currentPhaseIndex, phases]);
+  }, [currentPhaseIndex, phases, setIsRunning, triggerVisualFlash]);
 
-  // Watch for phase transition
+  // Timer tick — uses a deferred transition to avoid setting multiple timer states inside the effect body.
   useEffect(() => {
-    if (isRunning && timeLeft === 0) {
-      triggerPhaseTransition();
-    }
-  }, [isRunning, timeLeft, triggerPhaseTransition]);
-
-  const triggerVisualFlash = () => {
-    setVisualFlash(true);
-    setTimeout(() => setVisualFlash(false), 1500);
-  };
+    if (!isRunning) return;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          setTimeout(triggerPhaseTransition, 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning, triggerPhaseTransition]);
 
   const handleStart = () => {
     // Unlock audio context by playing empty/silent sound on initial interaction

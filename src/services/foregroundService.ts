@@ -7,13 +7,30 @@ import { Capacitor } from '@capacitor/core';
  * foreground service (same mechanism as phone calls / Spotify).
  */
 
-let foregroundServiceModule: any = null;
+type ForegroundServiceButtonEvent = { buttonId: number };
+type ForegroundServiceListener = { remove: () => void };
+type ForegroundServiceModule = {
+  startForegroundService: (options: {
+    id: number;
+    title: string;
+    body: string;
+    smallIcon: string;
+    buttons: { id: number; title: string }[];
+  }) => Promise<void>;
+  stopForegroundService: () => Promise<void>;
+  addListener: (
+    eventName: 'buttonClicked',
+    callback: (event: ForegroundServiceButtonEvent) => void
+  ) => Promise<ForegroundServiceListener>;
+};
+
+let foregroundServiceModule: ForegroundServiceModule | null = null;
 
 const getForegroundService = async () => {
   if (foregroundServiceModule) return foregroundServiceModule;
   try {
     const mod = await import('@capawesome-team/capacitor-android-foreground-service');
-    foregroundServiceModule = mod.ForegroundService;
+    foregroundServiceModule = mod.ForegroundService as unknown as ForegroundServiceModule;
     return foregroundServiceModule;
   } catch {
     console.warn('[ForegroundService] Plugin not available on this platform');
@@ -69,10 +86,15 @@ export const onDisconnectTapped = (callback: () => void): (() => void) => {
 
   getForegroundService().then((ForegroundService) => {
     if (!ForegroundService || state.removed) return;
-    const listener = ForegroundService.addListener('buttonClicked', (event: { buttonId: number }) => {
+    ForegroundService.addListener('buttonClicked', (event: { buttonId: number }) => {
       if (event.buttonId === 1) callback();
+    }).then((listener) => {
+      if (state.removed) {
+        listener.remove();
+        return;
+      }
+      state.removeListener = () => listener.remove();
     });
-    state.removeListener = () => listener.remove();
   });
 
   return () => {

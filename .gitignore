@@ -4,9 +4,11 @@ node_modules/
 # Build output
 dist/
 
-# Environment
-.env
-.env.local
+# Environment and machine-local agent state
+.env*
+.ai/
+*.log
+*.tsbuildinfo
 
 # Android native build artifacts
 android/app/build/
