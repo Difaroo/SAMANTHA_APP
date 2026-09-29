@@ -30,7 +30,16 @@ const getForegroundService = async () => {
   if (foregroundServiceModule) return foregroundServiceModule;
   try {
     const mod = await import('@capawesome-team/capacitor-android-foreground-service');
-    foregroundServiceModule = mod.ForegroundService as unknown as ForegroundServiceModule;
+    // Capacitor plugins are proxies and expose arbitrary property names as
+    // native methods. Returning that proxy from an async function makes the
+    // Promise resolver probe `.then`, which invokes a non-existent native
+    // `ForegroundService.then()` method. Return a plain wrapper instead.
+    const plugin = mod.ForegroundService;
+    foregroundServiceModule = {
+      startForegroundService: (options) => plugin.startForegroundService(options),
+      stopForegroundService: () => plugin.stopForegroundService(),
+      addListener: (eventName, callback) => plugin.addListener(eventName, callback),
+    } as ForegroundServiceModule;
     return foregroundServiceModule;
   } catch {
     console.warn('[ForegroundService] Plugin not available on this platform');

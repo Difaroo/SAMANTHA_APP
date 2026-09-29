@@ -3,10 +3,12 @@
 | Metadata | Value |
 |---|---|
 | Document status | Canonical current-state architecture |
-| System version | Samantha App 2.4.0, PRISM Sync Schema 1 |
+| System version | Samantha App 2.4.0, Voice Bridge Client 2.6.0, PRISM Sync Schema 1 |
 | Last verified | 2026-07-13 |
-| Project root | `/Users/apple/samantha-app` |
-| Companion service root | `/Users/apple/Prism` |
+| Project root | Active `SAMANTHA_APP` repository root, resolved at runtime |
+| Companion service root | Active PRISM repository root, resolved separately at runtime |
+
+Path notation in this document uses `APP_ROOT` for the active Samantha App repository, `PRISM_ROOT` for the companion PRISM repository, and `$HOME/Samantha/wiki` for the default local vault. Commands for Samantha App assume the current directory is `APP_ROOT` unless stated otherwise.
 
 ## 1. Purpose
 
@@ -82,11 +84,11 @@ flowchart LR
 | Capacitor Android shell | Native packaging, microphone permissions, foreground service, WebView host | Android app storage and preferences |
 | PRISM browser client | Desktop presentation, optimistic edits, local outbox | Browser localStorage |
 | PRISM Node service | Static UI, sync API, migration, brief endpoint | SQLite and brief files |
-| SQLite store | Canonical projects/tasks, versions, revisions, mutation receipts, conflicts | `/Users/apple/Prism/state/prism.sqlite` |
-| Seed | One-time legacy import | `/Users/apple/Prism/.prism_seed.json` |
+| SQLite store | Canonical projects/tasks, versions, revisions, mutation receipts, conflicts | `PRISM_ROOT/state/prism.sqlite` |
+| Seed | One-time legacy import | `PRISM_ROOT/.prism_seed.json` |
 | Voice token service | Issues LiveKit connection credentials | Outside this repository |
 | LiveKit | Real-time audio and data channel transport | Outside this repository |
-| Obsidian bridge | Structured memory-note creation and optional sync invocation | `/Users/apple/Samantha/wiki` |
+| Obsidian bridge | Structured memory-note creation and optional sync invocation | `$HOME/Samantha/wiki` by current convention |
 
 ## 5. Runtime Topology and Configuration
 
@@ -95,7 +97,7 @@ flowchart LR
 | Service | Default address | Notes |
 |---|---|---|
 | Samantha Vite app | `http://localhost:5173` | Started with `npm run dev` |
-| PRISM UI and API | `http://localhost:3333` | Started from `/Users/apple/Prism` with `npm start` |
+| PRISM UI and API | `http://localhost:3333` | Started from `PRISM_ROOT` with `npm start` |
 | Voice token endpoint | `http://localhost:3010/api/voice/token` | Configured by `.env` |
 | LiveKit | `ws://localhost:7880` | Local WebSocket endpoint |
 
@@ -116,6 +118,16 @@ The Tailscale HTTPS edge routes `/prism` to PRISM on port 3333 and `/token` to t
 ### 5.3 Build-time configuration rule
 
 Vite environment values are compiled into the web bundle. Changing `.env.production` does not alter an already installed APK. A configuration change requires a production build, Capacitor sync, APK build, and handset installation.
+
+Production routing is a fail-closed release contract:
+
+- `.env.production` is versioned because its `VITE_*` URLs are public client configuration, not secrets. Local `.env` variants remain ignored.
+- `npm run build` explicitly selects Vite production mode and runs `verify:mobile-routing` against `dist`.
+- `npm run cap:sync` rebuilds production assets, copies them to Android, and runs `verify:android-routing` against the copied bundle.
+- Android `preBuild` runs `verifyMobileRouting`; Gradle refuses to package assets that omit `https://xenya.tail6504c1.ts.net/prism` or contain a private Tailnet IPv4 URL.
+- The routing verifier also requires the production Voice token and LiveKit URLs plus canonical `/api/v1/sync`.
+
+This gate prevents Android Studio or a direct Gradle debug build from silently packaging stale development web assets. It proves artifact configuration; it does not prove that the Tailscale HTTPS edge is currently serving the configured route.
 
 ## 6. Technology Stack
 
@@ -178,7 +190,7 @@ src/
 
 ### 7.1 Application shell
 
-`src/App.tsx` initializes `SyncManager` once and renders four horizontally snapping full-screen views. Navigation can be driven by the bottom icon controls or by horizontal swiping. The default view is Next.
+`src/App.tsx` initializes `SyncManager` once and keeps four full-screen views mounted so a live Voice connection survives navigation. Only the bottom icon controls change the active view; the viewport is not horizontally scrollable. The default view is Voice. Sortable lists apply a shared vertical-axis modifier so dragging cannot escape into an adjacent view.
 
 Global overlays are intentionally outside individual views:
 
@@ -517,7 +529,7 @@ Network errors do not clear the outbox. The user continues working against the l
 
 ### 11.1 SQLite configuration
 
-The store opens `/Users/apple/Prism/state/prism.sqlite` and enables:
+The store opens `PRISM_ROOT/state/prism.sqlite` and enables:
 
 - write-ahead logging (`journal_mode = WAL`);
 - foreign keys;
@@ -569,7 +581,7 @@ The retired design allowed one client to replace the entire shared state and was
 
 ## 12. PRISM Desktop Client
 
-`/Users/apple/Prism/public/prism-sync.js` gives the desktop browser the same local-first behavior as mobile:
+`PRISM_ROOT/public/prism-sync.js` gives the desktop browser the same local-first behavior as mobile:
 
 - cached server baseline in `prism-cache-v1`;
 - outbox in `prism-outbox-v1`;
@@ -644,6 +656,12 @@ sequenceDiagram
     T-->>B: token and optional serverUrl
     B->>L: Connect room
     B->>L: Enable microphone or standby PTT
+    U->>V: Hold speed readout for fixed override or tap for Auto
+    V->>B: set_voice_speed
+    B->>L: Authenticated data-channel setting
+    L-->>B: voice_settings acknowledgement
+    B->>L: connected_and_ready handshake
+    L-->>B: generation-scoped ready_ack
     B-->>V: connection, stage, transcript events
     V->>F: Start microphone foreground service
     U->>V: PTT press/release or disconnect
@@ -653,25 +671,44 @@ sequenceDiagram
 
 ### 15.1 Boundaries
 
-`voiceBridge.ts` owns LiveKit mechanics and exposes connection state, pipeline stages, transcripts, microphone control, and disconnect behavior. `voiceStore.ts` exposes only UI-level connection and pipeline state. `VoiceControlView.tsx` owns user interaction and presentation.
+`voiceBridge.ts` owns LiveKit mechanics and exposes connection state, pipeline stages, transcripts, microphone control, persistent voice-speed preference, session-scoped speaker correction, and disconnect behavior. `voiceDataProtocol.ts` validates the Voice Bridge 2.6.1 data-channel contract. `roomLease.ts` prevents callbacks from a cancelled or superseded connection generation from changing current UI state. `voiceStore.ts` exposes only UI-level connection and pipeline state. `VoiceControlView.tsx` owns user interaction and presentation.
 
 The token response's `serverUrl` takes precedence over `VITE_LIVEKIT_URL`. The environment URL is a fallback. This allows the token service to select the actual LiveKit deployment without rebuilding the client.
 
 ### 15.2 Voice modes
 
+- Voice is the default navigation state. Its only persistent status UI is a colour-coded text readout below the central CTA; connection cards and connected lozenges are intentionally absent.
+- The Samantha logo/wordmark is vertically centred and fades to 20% while connected so always-on subtitles can occupy the same depth plane.
 - Open microphone mode enables the local audio track for continuous conversation.
 - Push-to-talk mode keeps the microphone disabled until the user holds the PTT control.
+- The central CTA disconnects in continuous mode and becomes the microphone action in PTT mode; the adjacent microphone-off control only changes mode.
+- Consecutive subtitle captures with the same transport-owned speaker role are grouped at render time. No additional conversation state is inferred.
+- Initial PTT connection publishes the microphone track once before muting it; readiness never waits on a track that was never created.
+- PTT mode, press, and release are also published to the worker as `ptt_mode`, `ptt_down`, and `ptt_up` control events.
+- The fallback client voice profile is the bridge's current `af_bella`; the deployed worker remains authoritative for validated TTS defaults and per-turn voice controls.
 - A test-only `mock://` adapter exercises the complete UI contract without a real LiveKit service.
 
-### 15.3 Android continuity
+### 15.3 Voice Bridge 2.6.1 data contract
+
+- A room is user-visible as connected only after `ready_ack` reports `status: ready`, a non-negative generation, and `sessionReady`, `clientReady`, and `audioReady` all equal to `true`.
+- `warming` remains a visible non-ready phase. A missing complete acknowledgement times out and fails the connection rather than falling through to a false connected state.
+- Structured subtitles carry a bounded text value, a transport-owned speaker role, and validated optional speaker and delivery identifiers.
+- Unknown provider speakers can be explicitly enrolled as David for the current room generation; transport labels never silently establish identity.
+- Recoverable `voice_error` events keep the wider app usable and expose only validated error codes.
+- Active-speaker signalling is the sole authority for the Speaking UI state. The continuously advancing media clock may complete delivery evidence only while Samantha is actively speaking; silence can never set Speaking.
+- `set_voice_speed` carries either a validated 0.5–2.0 speed or `null` for Auto; `voice_settings` confirms the worker's authoritative speed and fixed/Auto state.
+- A saved fixed speed is sent before the readiness handshake and replayed before re-readiness whenever the `samantha` participant rejoins, so first-turn pace survives both handset reconnects and worker replacement.
+- Disconnect aborts an in-flight token request, and stale LiveKit callbacks cannot release or overwrite a newer room.
+
+### 15.4 Android continuity
 
 When a voice session is active on Android, `foregroundService.ts` starts a microphone-type foreground service with a persistent notification and Disconnect action. The manifest declares microphone, foreground service, wake lock, Internet, audio settings, and Android 13 notification permissions.
 
 The service improves survival when the app is backgrounded or the screen is off. Android can still terminate the process under system pressure; voice session restoration after process death is not implemented.
 
-### 15.4 Native microphone handling
+### 15.5 Native microphone handling
 
-`MainActivity` installs a WebChromeClient that grants WebView permission requests so `getUserMedia()` can access the microphone inside Capacitor. The current implementation grants every resource in a WebView permission request. This is broader than required and should be narrowed to audio capture before broader distribution.
+`MainActivity` bridges WebView audio capture to Android's package-level `RECORD_AUDIO` runtime request. It grants only `RESOURCE_AUDIO_CAPTURE` after approval and denies unrelated WebView permission requests.
 
 ## 16. Android Packaging
 
@@ -695,7 +732,7 @@ The web, package, and native release versions are aligned for 2.4.0. Every subse
 
 ### 17.1 Scope
 
-`scripts/obsidian-memory-bridge.mjs` writes structured Markdown memories into the existing vault at `/Users/apple/Samantha/wiki` without moving or replacing the vault.
+`scripts/obsidian-memory-bridge.mjs` writes structured Markdown memories into the existing vault, conventionally at `$HOME/Samantha/wiki`, without moving or replacing the vault. The current script still contains a legacy machine-specific default and should be changed to runtime home discovery before cross-machine use; `--vault` is the portable override.
 
 Supported note types:
 
@@ -816,7 +853,7 @@ The current service logs startup paths and brief creation but does not provide s
 
 ### 21.1 Samantha app
 
-Run from `/Users/apple/samantha-app`:
+Run from `APP_ROOT`:
 
 ```bash
 npm run lint
@@ -840,7 +877,7 @@ The browser contracts cover:
 
 ### 21.2 PRISM service
 
-Run from `/Users/apple/Prism`:
+Run from `PRISM_ROOT`:
 
 ```bash
 npm test
@@ -895,7 +932,7 @@ cd android
 Debug APK output:
 
 ```text
-/Users/apple/samantha-app/android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 An APK build proves packaging, not handset deployment. Final mobile verification requires an attached/authorized device, installation, app launch, offline mutation, reconnection, exact Next parity, voice microphone permission, background voice behavior, and upgrade persistence.
@@ -905,7 +942,7 @@ An APK build proves packaging, not handset deployment. Final mobile verification
 ### 22.1 Start PRISM
 
 ```bash
-cd /Users/apple/Prism
+cd "$PRISM_ROOT"
 npm start
 ```
 
@@ -918,7 +955,6 @@ curl -fsS http://localhost:3333/api/v1/health
 ### 22.2 Start Samantha development UI
 
 ```bash
-cd /Users/apple/samantha-app
 npm run dev
 ```
 
@@ -1099,14 +1135,14 @@ The most recent architecture work built the APK but could not install it because
 
 | Path | Ownership |
 |---|---|
-| `/Users/apple/Prism/lib/prism-sync-store.js` | SQLite schema, migration, mutations, conflicts, snapshots |
-| `/Users/apple/Prism/prism-server.js` | HTTP/static/sync/brief endpoints |
-| `/Users/apple/Prism/public/prism-sync.js` | Desktop local cache, outbox, sync, reconciliation |
-| `/Users/apple/Prism/public/prism.js` | Desktop product behavior and Next rendering |
-| `/Users/apple/Prism/service-worker.js` | Desktop shell cache policy |
-| `/Users/apple/Prism/tests/prism-sync.test.js` | Server synchronization contracts |
-| `/Users/apple/Prism/.prism_seed.json` | Immutable one-time migration source |
-| `/Users/apple/Prism/state/prism.sqlite` | Live canonical shared state |
+| `PRISM_ROOT/lib/prism-sync-store.js` | SQLite schema, migration, mutations, conflicts, snapshots |
+| `PRISM_ROOT/prism-server.js` | HTTP/static/sync/brief endpoints |
+| `PRISM_ROOT/public/prism-sync.js` | Desktop local cache, outbox, sync, reconciliation |
+| `PRISM_ROOT/public/prism.js` | Desktop product behavior and Next rendering |
+| `PRISM_ROOT/service-worker.js` | Desktop shell cache policy |
+| `PRISM_ROOT/tests/prism-sync.test.js` | Server synchronization contracts |
+| `PRISM_ROOT/.prism_seed.json` | Immutable one-time migration source |
+| `PRISM_ROOT/state/prism.sqlite` | Live canonical shared state |
 
 ## 28. Change-Control Contract
 
@@ -1120,6 +1156,22 @@ Any change to Samantha capability, routing, tools, skills, memory, voice, app be
 6. this architecture reference or a linked focused document is updated if an invariant, dependency, endpoint, persistence rule, or operational procedure changed.
 
 For sync changes specifically, exact identity and order parity is mandatory proof. Matching counts are necessary but not sufficient.
+
+### 28.1 Source-control authority
+
+The canonical source repository is `https://github.com/Difaroo/SAMANTHA_APP`. The release branch is `master` and must track `origin/master`. The repository was established as the standalone project truth on 2026-07-13; similarly named Samantha or voice repositories are separate systems and must not be used as substitute remotes.
+
+Before project work:
+
+1. read the repository instruction chain, `.ai/HYDRATOR.md` when present, and the newest handover;
+2. run `git status --short --branch` and inspect recent commits;
+3. preserve unrelated dirty changes and determine whether they are released, staged, or work in progress;
+4. validate important paths against the live tree rather than relying on archived notes;
+5. never ingest or commit environment files, credentials, generated reports, build output, or local agent state.
+
+### 28.2 Handover contract
+
+A handover must distinguish released truth from uncommitted work. It must identify the current branch/upstream, release commit, dirty files, intended next outcome, invariants, verification commands, external dependencies, and blockers. Handover documentation does not authorize reverting or committing changes left by another task.
 
 ## 29. Glossary
 

@@ -74,17 +74,19 @@ test.describe('Samantha App user outcome contracts', () => {
     await mockVoiceToken(page);
 
     await page.goto('/');
-    await page.getByRole('button', { name: 'Voice' }).click();
+    await page.getByRole('button', { name: 'Voice', exact: true }).click();
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
 
     await expect(page.getByRole('button', { name: 'Disconnect voice' })).toBeVisible();
+    await expect(page.getByLabel('Voice transcript')).toBeVisible();
+    await expect(page.getByRole('button', { name: /subtitles/i })).toHaveCount(0);
     await page.getByRole('button', { name: 'Enable push to talk' }).click();
     await expect(page.getByRole('button', { name: 'Disable push to talk' })).toBeVisible();
 
     const ptt = page.getByRole('button', { name: 'Push to Talk', exact: true });
     await ptt.dispatchEvent('pointerdown', { pointerType: 'touch' });
-    await expect(page.getByText('Listening...')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Voice status' })).toHaveText('Listening');
     await ptt.dispatchEvent('pointerup', { pointerType: 'touch' });
-    await expect(page.getByText('Standby (PTT)')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'Voice status' })).toHaveText('Standby');
   });
 });

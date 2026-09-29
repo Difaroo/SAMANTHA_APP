@@ -7,7 +7,8 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent
@@ -20,9 +21,11 @@ import {
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { restrictToVerticalAxis } from '../dnd/modifiers';
 
 const SortableProjectCard: React.FC<{ project: Project; onSelect: (id: string) => void; epicCount: number }> = ({ project, onSelect, epicCount }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: project.id });
+  const projectColor = project.color || '#6b7280';
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -33,30 +36,38 @@ const SortableProjectCard: React.FC<{ project: Project; onSelect: (id: string) =
   return (
     <div
       ref={setNodeRef}
+      data-project-id={project.id}
       style={style}
       onClick={() => onSelect(project.id)}
       className={`relative flex items-center p-4 mb-3 rounded-xl border cursor-pointer ${
         isDragging ? 'border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] bg-white/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
       } transition-colors group`}
     >
-      <div
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
         {...attributes}
         {...listeners}
+        aria-label={`Drag ${project.name}`}
+        data-drag-handle="true"
         onClick={(e) => e.stopPropagation()}
-        className="px-2 text-muted-foreground hover:text-white cursor-grab active:cursor-grabbing"
+        style={{ touchAction: 'none' }}
+        className="flex min-h-11 min-w-11 items-center justify-center px-2 text-muted-foreground hover:text-white cursor-grab active:cursor-grabbing"
       >
         <GripVertical size={20} />
-      </div>
-      <div className="flex-1 px-4">
-        <h3 className="text-xl font-medium text-white mb-1 group-hover:text-primary transition-colors">{project.name}</h3>
+      </button>
+      {/* Color bar */}
+      <div className="w-1 h-10 rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: projectColor }} />
+      <div className="flex-1 px-2">
+        <h3 className="text-xl font-medium mb-1 group-hover:opacity-80 transition-opacity" style={{ color: projectColor }}>{project.name}</h3>
         <p className="text-sm text-muted-foreground">{epicCount} Tasks</p>
       </div>
     </div>
   );
 };
 
-const SortableProjectEpic: React.FC<{ epic: Epic; onSelect: (id: string) => void; onAdd: (id: string) => void }> = ({ epic, onSelect, onAdd }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: epic.id });
+const SortableProjectEpic: React.FC<{ epic: Epic; projectColor: string; onSelect: (id: string) => void; onAdd: (id: string) => void }> = ({ epic, projectColor, onSelect, onAdd }) => {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: epic.id });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1 };
 
   return (
@@ -68,9 +79,20 @@ const SortableProjectEpic: React.FC<{ epic: Epic; onSelect: (id: string) => void
         isDragging ? 'border-primary bg-white/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
       } transition-colors`}
     >
-      <div {...attributes} {...listeners} onClick={e => e.stopPropagation()} className="px-2 text-muted-foreground hover:text-white cursor-grab active:cursor-grabbing">
+      <div className="w-1 self-stretch rounded-full mr-2 flex-shrink-0" style={{ backgroundColor: projectColor }} />
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Drag ${epic.title}`}
+        data-drag-handle="true"
+        onClick={e => e.stopPropagation()}
+        style={{ touchAction: 'none' }}
+        className="flex min-h-11 min-w-11 items-center justify-center px-2 text-muted-foreground hover:text-white cursor-grab active:cursor-grabbing"
+      >
         <GripVertical size={16} />
-      </div>
+      </button>
       <div className="flex-1 px-2">
         <h4 className="text-sm font-medium text-white">{epic.title}</h4>
       </div>
@@ -95,11 +117,12 @@ const SortableProjectEpic: React.FC<{ epic: Epic; onSelect: (id: string) => void
 
 export const ProjectsView: React.FC = () => {
   const { projects, setProjects, epics, setEpics, _hasHydrated } = useEntityStore();
-  const { setSelectedEpicDetailId } = useNavigationStore();
+  const { setSelectedEpicDetailId, setCardDragActive } = useNavigationStore();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -137,6 +160,7 @@ export const ProjectsView: React.FC = () => {
   };
 
   const handleProjectDragEnd = (event: DragEndEvent) => {
+    setCardDragActive(false);
     const { active, over } = event;
     if (over && active.id !== over.id) {
       setProjects((() => {
@@ -148,6 +172,7 @@ export const ProjectsView: React.FC = () => {
   };
 
   const handleEpicDragEnd = (event: DragEndEvent) => {
+    setCardDragActive(false);
     const { active, over } = event;
     if (over && active.id !== over.id) {
       const projectEpics = epics.filter(e => e.projectId === selectedProjectId);
@@ -178,7 +203,7 @@ export const ProjectsView: React.FC = () => {
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h2 className="text-2xl font-bold text-white leading-tight">{project?.name}</h2>
+              <h2 className="text-2xl font-bold leading-tight" style={{ color: project?.color || '#ffffff' }}>{project?.name}</h2>
               <p className="text-xs text-muted-foreground mt-1">{project?.description}</p>
             </div>
           </div>
@@ -209,12 +234,20 @@ export const ProjectsView: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto pb-24 no-scrollbar">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleEpicDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragStart={() => setCardDragActive(true)}
+            onDragEnd={handleEpicDragEnd}
+            onDragCancel={() => setCardDragActive(false)}
+          >
             <SortableContext items={projectEpics.map(e => e.id)} strategy={verticalListSortingStrategy}>
               {projectEpics.map(epic => (
                 <SortableProjectEpic
                   key={epic.id}
                   epic={epic}
+                  projectColor={project?.color || '#6b7280'}
                   onSelect={setSelectedEpicDetailId}
                   onAdd={addToGlobalBacklog}
                 />
@@ -233,8 +266,15 @@ export const ProjectsView: React.FC = () => {
         <p className="text-muted-foreground">Reorder projects or select one to manage its tasks.</p>
       </header>
 
-      <div className="flex-1 overflow-y-auto pr-2 no-scrollbar">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragStart={() => setCardDragActive(true)}
+          onDragEnd={handleProjectDragEnd}
+          onDragCancel={() => setCardDragActive(false)}
+        >
           <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
             {projects.map((p) => (
               <SortableProjectCard

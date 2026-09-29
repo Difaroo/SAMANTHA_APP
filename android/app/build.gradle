@@ -1,5 +1,48 @@
 apply plugin: 'com.android.application'
 
+def productionPrismBase = 'https://xenya.tail6504c1.ts.net/prism'
+def productionVoiceTokenEndpoint = 'http://100.113.109.60:3010/api/voice/token'
+def productionLivekitUrl = 'ws://100.113.109.60:7880'
+def tailscaleIpv4Route = ~/(?i)\b(?:https?|wss?):\/\/100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./
+
+tasks.register('verifyMobileRouting') {
+    def publicAssets = file('src/main/assets/public')
+    inputs.dir(publicAssets)
+    doLast {
+        if (!publicAssets.isDirectory()) {
+            throw new GradleException('Capacitor web assets are missing; run npm run cap:sync before assembling Android')
+        }
+        def routeFiles = fileTree(publicAssets) {
+            include '**/*.html'
+            include '**/*.js'
+        }.files
+        if (routeFiles.isEmpty()) {
+            throw new GradleException('Capacitor web assets contain no compiled HTML or JavaScript')
+        }
+        def compiledBundle = routeFiles.collect { it.getText('UTF-8') }.join('\n')
+        if (!compiledBundle.contains(productionPrismBase)) {
+            throw new GradleException("Android assets are missing production PRISM route: ${productionPrismBase}")
+        }
+        [productionVoiceTokenEndpoint, productionLivekitUrl].each { expectedRoute ->
+            if (!compiledBundle.contains(expectedRoute)) {
+                throw new GradleException("Android assets are missing production Voice route: ${expectedRoute}")
+            }
+        }
+        ['http://xenya.tail6504c1.ts.net:3010', 'ws://xenya.tail6504c1.ts.net:7880'].each { staleRoute ->
+            if (compiledBundle.contains(staleRoute)) {
+                throw new GradleException("Android assets contain a stale MagicDNS Voice route: ${staleRoute}")
+            }
+        }
+        def nonCanonicalRoutes = compiledBundle
+            .replace(productionVoiceTokenEndpoint, '')
+            .replace(productionLivekitUrl, '')
+        def privateRoute = nonCanonicalRoutes =~ tailscaleIpv4Route
+        if (privateRoute.find()) {
+            throw new GradleException("Android assets contain a non-canonical private Tailnet route: ${privateRoute.group()}")
+        }
+    }
+}
+
 android {
     namespace = "com.samantha.voice"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +50,8 @@ android {
         applicationId "com.samantha.voice"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "2.4.0"
+        versionCode 16
+        versionName "2.4.14"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -22,6 +65,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('verifyMobileRouting')
 }
 
 repositories {

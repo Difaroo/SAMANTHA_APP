@@ -1,6 +1,8 @@
 # Samantha Android App — Data Flow Audit
 
 > Superseded on 2026-07-13 by `docs/sync-architecture.md`. The empty-seed/full-state architecture described below has been replaced by the revisioned `/api/v1/sync` contract. This file remains as incident history.
+>
+> Absolute filesystem paths in this report record the original incident machine. They are historical evidence, not portable operating instructions.
 
 **Date:** 2026-07-11 20:33 BST
 **Auditor:** Samantha (Sovereign Executive)

@@ -139,6 +139,7 @@ function applyMutations(projects: Project[], epics: Epic[], mutations: SyncMutat
           id: mutation.entityId,
           name: String(value.name || 'Untitled project'),
           description: String(value.abstract || ''),
+          color: typeof value.color === 'string' ? value.color : undefined,
           rank: typeof value.rank === 'string' ? value.rank : undefined,
           version: mutation.baseVersion,
         };

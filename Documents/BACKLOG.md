@@ -2,7 +2,7 @@
 
 **Current release:** 2.4.0
 
-**Updated:** 2026-07-13
+**Updated:** 2026-08-14
 
 Completed 2.4.0 work is archived in `Sprints/archive/2.4.0-reliable-prism-sync.md`. This file contains only outstanding work.
 
@@ -12,7 +12,7 @@ Completed 2.4.0 work is archived in `Sprints/archive/2.4.0-reliable-prism-sync.m
 - [ ] Verify cached data and a pending offline mutation survive the upgrade.
 - [ ] Verify exact Next task identity and order parity after reconnect.
 - [ ] Verify microphone permission, LiveKit connection, push to talk, background notification, and notification Disconnect on the handset.
-- [ ] Establish the correct GitHub `origin/master` for this standalone project and publish the release commit.
+- [ ] Review, complete, and verify the unreleased project-color and mobile touch/scroll changes listed in `HANDOVER_2026-08-14.md`.
 
 ## P1 - Operational Reliability
 
@@ -49,6 +49,7 @@ Completed 2.4.0 work is archived in `Sprints/archive/2.4.0-reliable-prism-sync.m
 
 ## P2 - Samantha Memory
 
+- [ ] Replace machine-specific memory-bridge vault and Node paths with runtime home/tool discovery.
 - [ ] Complete Obsidian Headless login and vault sync enrollment.
 - [ ] Prove a new memory note reaches Obsidian on phone within five seconds.
 - [ ] Index the wiki in Samantha's retrieval pipeline.

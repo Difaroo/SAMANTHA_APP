@@ -6,7 +6,10 @@ dist/
 
 # Environment and machine-local agent state
 .env*
-.ai/
+!.env.example
+!.env.production
+.ai/*
+!.ai/project.json
 *.log
 *.tsbuildinfo
 

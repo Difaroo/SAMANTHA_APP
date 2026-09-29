@@ -2,10 +2,25 @@ import { z } from 'zod';
 
 export const SYNC_SCHEMA_VERSION = 1;
 
+/** Default project colors matching PRISM desktop palette */
+export const DEFAULT_PROJECT_COLORS: Record<string, string> = {
+  'samantha-core':   '#f472b6',
+  'samantha-app':    '#34d399',
+  'arcrunner-saas':  '#60a5fa',
+  'voice-bridge':    '#a78bfa',
+  'prism-v2':        '#fb923c',
+  'maxq-consulting': '#22d3ee',
+  'biography-of-becoming': '#e879f9',
+  'candy-jones-nohs': '#fbbf24',
+  'ufo-invasion':    '#6b7280',
+  'love-implants':   '#ef4444',
+};
+
 export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
+  color: z.string().optional(),
   rank: z.string().optional(),
   version: z.number().int().nonnegative().optional(),
   updatedAt: z.string().optional(),
@@ -142,6 +157,7 @@ export function snapshotToEntities(streams: PrismStream[]) {
       id: stream.id,
       name: stream.name,
       description: stream.abstract || '',
+      color: DEFAULT_PROJECT_COLORS[stream.id.replace(/-\d+$/, '')] || '#6b7280',
       rank: stream.rank || rankForIndex(projectIndex),
       version: stream.version || 0,
       updatedAt: stream.updatedAt,
@@ -160,6 +176,7 @@ export function projectToPrism(project: Project) {
     type: 'Project',
     status: 'Active',
     abstract: project.description,
+    color: project.color,
     rank: project.rank,
   };
 }

@@ -12,7 +12,7 @@ Mobile edits are committed locally before network work. Offline mutations remain
 - `src/sync/indexedDbStorage.ts`: transactional mobile cache/outbox storage with a localStorage rollback mirror.
 - `src/stores/entityStore.ts`: local repository and optimistic presentation state. It does not perform network I/O.
 - `src/services/syncManager.ts`: transport, lifecycle triggers, batching, timeout, retry, acknowledgement, and reconciliation.
-- `/Users/apple/Prism/lib/prism-sync-store.js`: canonical SQLite state, revisions, idempotency receipts, tombstones, and conflict records.
+- `PRISM_ROOT/lib/prism-sync-store.js`: canonical SQLite state, revisions, idempotency receipts, tombstones, and conflict records. Resolve `PRISM_ROOT` from the companion clone at runtime.
 
 ## Protocol
 
@@ -49,10 +49,10 @@ The immutable legacy seed did not have one consistent Next field. The one-time d
 ## Verification
 
 ```bash
-cd /Users/apple/Prism && npm test
-cd /Users/apple/samantha-app && npm run lint
-cd /Users/apple/samantha-app && npm run build
-cd /Users/apple/samantha-app && npm run test:e2e
+(cd "$PRISM_ROOT" && npm test)
+npm run lint
+npm run build
+npm run test:e2e
 curl http://localhost:3333/api/v1/health
 ```
 

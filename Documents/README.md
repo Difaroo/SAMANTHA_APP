@@ -19,6 +19,9 @@ This directory is the management and operational record for Samantha App release
 | [Project History](PROJECT_HISTORY.md) | Versioned record of released outcomes |
 | [Architecture](SAMANTHA_APP_ARCHITECTURE.md) | Current system boundaries, contracts, risks, and operations |
 | [2.4.0 Sprint Archive](Sprints/archive/2.4.0-reliable-prism-sync.md) | Closed sprint scope, evidence, and carry-forward work |
+| [Current Handover](HANDOVER_2026-08-14.md) | New-task starting state, unreleased changes, priorities, and verification |
+| [APK Routing Proof](MERCURY_APK_ROUTING_2026-08-20.md) | Production routing contract, artifact evidence, and bounded online blocker |
+| [Online Handset Acceptance](MERCURY_ONLINE_ACCEPTANCE_2026-08-20.md) | Physical install, revision-56 board proof, and remaining device DNS blocker |
 
 ## Release Discipline
 
@@ -32,3 +35,12 @@ Every release must:
 6. record the commit hash and deployment proof after publication.
 
 The focused implementation notes in `../docs/` support this management layer but do not replace it.
+
+## Project Truth
+
+- Canonical repository: `https://github.com/Difaroo/SAMANTHA_APP`
+- Canonical branch: `master`, tracking `origin/master`
+- Last released commit: `b780006ec4dfaf29cba56cd60f268d80a706e3f7`
+- Current release: 2.4.0
+
+New tasks must read the current handover before editing and must preserve any unrelated dirty worktree changes.

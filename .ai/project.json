@@ -1,0 +1,78 @@
+{
+  "name": "samantha-app",
+  "framework": "react-capacitor",
+  "language": "typescript",
+  "database": "prism-sqlite-via-sync-api",
+  "root": "/Users/apple/samantha-app",
+  "build_cmd": "npm run build",
+  "dev_cmd": "npm run dev",
+  "test_cmd": "npm run test:e2e",
+  "lint_cmd": "npm run lint",
+  "port": 5173,
+  "package_manager": "npm",
+  "source_schema_version": 1,
+  "sources": [
+    {
+      "id": "application",
+      "kind": "application",
+      "provider": "react-capacitor",
+      "purpose": "Samantha mobile application, PRISM synchronization, and VoiceBridge client behavior",
+      "path": ".",
+      "config_paths": [
+        "package.json",
+        "vite.config.ts",
+        "tsconfig.app.json"
+      ],
+      "owns": [
+        "React application UI",
+        "PRISM entity synchronization",
+        "VoiceBridge LiveKit client",
+        "offline IndexedDB outbox"
+      ],
+      "selectors": [
+        "PRISM sync",
+        "api/v1/sync",
+        "sync manager",
+        "Next queue",
+        "nextRank",
+        "VoiceBridge client",
+        "LiveKit client",
+        "Projects view",
+        "Next view",
+        "Timer view"
+      ]
+    },
+    {
+      "id": "deployment",
+      "kind": "deployment",
+      "provider": "capacitor-android",
+      "purpose": "Android packaging, permissions, and build-time endpoint configuration",
+      "path": "android",
+      "config_paths": [
+        "capacitor.config.ts",
+        "android/app/build.gradle",
+        "android/app/src/main/AndroidManifest.xml"
+      ],
+      "owns": [
+        "Android native packaging",
+        "build-time endpoint configuration",
+        "Android permissions",
+        "voice foreground service packaging"
+      ],
+      "selectors": [
+        "Android build",
+        "APK",
+        "Capacitor sync",
+        "Android deployment",
+        "production configuration",
+        "device installation",
+        "microphone permission",
+        "foreground notification"
+      ]
+    }
+  ],
+  "browser_test_cmd": "npm run test:e2e",
+  "startup_check_url": "http://localhost:5173",
+  "git_repo": "Difaroo/SAMANTHA_APP",
+  "git_branch": "master"
+}

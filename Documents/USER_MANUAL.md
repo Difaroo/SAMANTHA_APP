@@ -1,21 +1,23 @@
 # Samantha App User Manual
 
-**Applies to:** Samantha App 2.4.0
+**Applies to:** Samantha App 2.4.13
 
 ## Overview
 
-Samantha is an Android-first companion to PRISM. It provides Voice, Projects, Next, and Timer in one swipeable interface. Project changes are available offline and synchronize with PRISM when connectivity returns.
+Samantha is an Android-first companion to PRISM. It provides Voice, Projects, Next, and Timer in one mobile interface. Project changes are available offline and synchronize with PRISM when connectivity returns.
+
+The installed web-app release is shown in the top-right corner. This manual describes version 2.4.13; use that label when reporting a defect so behavior can be matched to the correct source revision.
 
 ## Navigation
 
-Use the four icons along the bottom edge or swipe horizontally:
+Swipe horizontally or use the four icons along the bottom edge to move between main screens. On sortable cards, press and hold the grab grip to enter drag mode; card movement is vertical-only and cannot trigger screen navigation:
 
 - **Voice:** connect to Samantha, review the live transcript, and use push to talk.
 - **Projects:** browse projects and their tasks.
 - **Next:** review and prioritize the cross-project execution queue.
 - **Timer:** run a focus sequence for the selected task.
 
-The app opens on Next by default.
+The app opens on Voice by default.
 
 ## Sync Status
 
@@ -60,13 +62,18 @@ Starting a task from Projects or Next gives Timer that task's context. Timer sup
 
 ## Voice
 
-1. Open Voice and tap **Connect**.
+1. The app opens on Voice. Tap the circular voice-chat control to connect.
 2. Grant microphone and notification permissions when Android requests them.
-3. Use continuous microphone mode or enable push to talk.
-4. In push-to-talk mode, hold the central microphone control while speaking.
-5. Tap **Disconnect** in the app or the Android foreground notification to end the session.
+3. Wait for the bridge to finish warming and report Listening; Cancel stops an in-progress connection.
+4. The central control becomes **Disconnect** during a continuous-microphone call. Tap the side microphone-off control to enable push to talk.
+5. In push-to-talk mode, hold the central purple microphone control while speaking. Tap the white microphone-off control to return to continuous mode.
+6. Subtitles are always on. Samantha's turns are purple and your turns are white. Consecutive captures from the same speaker are grouped into one turn. New captures follow automatically until you scroll back; the down-chevron then pauses that movement. Tap the chevron to jump to the latest capture and resume following.
+7. The bottom-left speed readout is purple while Samantha controls expressive speed automatically. Press and hold it to reveal the vertical 0.5×–2.0× override; it turns white while a fixed speed is active.
+8. Tap the speed readout once to restore Auto. You can also say “speak slower,” “speak faster,” “set your voice speed to 0.75,” or “return to normal voice speed.”
+9. If an unknown speaker label is wrong, use **This is David** to correct that speaker for the current voice session.
+10. Tap **Disconnect** in the app or the Android foreground notification to end the session.
 
-Voice failures do not prevent Projects, Next, Timer, or synchronization from working. A connection error changes the Connect control to Retry.
+Voice failures do not prevent Projects, Next, Timer, or synchronization from working. A connection error changes the Connect control to Retry; a turn-level error remains recoverable without claiming that the entire bridge is ready or healthy.
 
 ## Offline Use
 
@@ -93,6 +100,6 @@ If desktop and mobile appear different:
 
 ## Current Release Notes
 
-Version 2.4.0 replaces full-state synchronization with a durable entity outbox, idempotent mutations, version conflicts, and canonical Next ordering. It also introduces explicit sync status/retry controls, hardened voice controls, offline contract coverage, and aligned web/Android version displays.
+Version 2.4.5 refines the Voice composition with aligned readouts, a circular disconnect action, persistent post-call lockup dimming, purple subtitle edges, and a deeper subtitle fade. It retains the reader-controlled subtitle following, vertical-only drag boundaries, Voice Bridge 2.6.1 transport, and durable PRISM synchronization contracts.
 
-The Android package has been built, but final installation and upgrade verification on David's physical handset remains a release follow-up.
+The Android package must pass physical first-turn, microphone, speed-change, and response-loop acceptance before distribution.

@@ -35,7 +35,9 @@ export const SprintTimerView: React.FC = () => {
   const { epics, projects } = useEntityStore();
   const { activeEpicId } = useNavigationStore();
   const activeEpic = epics.find(e => e.id === activeEpicId) || null;
-  const projectName = activeEpic ? (projects.find(p => p.id === activeEpic.projectId)?.name || 'Unknown') : '';
+  const activeProject = activeEpic ? projects.find(p => p.id === activeEpic.projectId) : null;
+  const projectName = activeProject?.name || '';
+  const projectColor = activeProject?.color || '#a855f7';
 
   const [phases, setPhases] = useState<Phase[]>(ULTRADIAN_PRESET);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
@@ -126,7 +128,7 @@ export const SprintTimerView: React.FC = () => {
         <div>
           {activeEpic ? (
             <>
-              <h2 className="text-sm font-mono tracking-widest text-primary uppercase">{projectName}</h2>
+              <h2 className="text-sm font-mono tracking-widest uppercase" style={{ color: projectColor }}>{projectName}</h2>
               <h1 className="text-xl font-bold text-white">{activeEpic.title}</h1>
             </>
           ) : (

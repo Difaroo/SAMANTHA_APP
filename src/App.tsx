@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigationStore, type ViewState } from './stores/navigationStore';
 import { useVoiceStore } from './stores/voiceStore';
 import { BottomNav } from './components/BottomNav';
@@ -65,51 +65,82 @@ const SyncStatusIndicator: React.FC = () => {
 };
 
 const views: ViewState[] = ['voice', 'projects', 'backlog', 'timer'];
+const SWIPE_AXIS_SLOP = 10;
+const SWIPE_COMMIT_DISTANCE = 64;
+
+type SwipeGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  axis: 'pending' | 'horizontal' | 'vertical';
+};
 
 const ViewContainer: React.FC = () => {
-  const { currentView, setCurrentView } = useNavigationStore();
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  // Add a ref to avoid infinite loops during programmatic scrolling
-  const isProgrammaticScroll = useRef(false);
-  
-  // Programmatic scroll when BottomNav changes currentView
-  useEffect(() => {
-    if (scrollContainerRef.current && !isProgrammaticScroll.current) {
-      const idx = views.indexOf(currentView);
-      if (idx !== -1) {
-        const width = scrollContainerRef.current.clientWidth;
-        isProgrammaticScroll.current = true;
-        scrollContainerRef.current.scrollTo({
-          left: idx * width,
-          behavior: 'smooth'
-        });
-        
-        // Reset flag after animation
-        setTimeout(() => {
-          isProgrammaticScroll.current = false;
-        }, 500);
-      }
-    }
-  }, [currentView]);
+  const { currentView, setCurrentView, cardDragActive } = useNavigationStore();
+  const currentViewIndex = Math.max(0, views.indexOf(currentView));
+  const swipeGestureRef = useRef<SwipeGesture | null>(null);
+  const suppressClickRef = useRef(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
 
-  // Sync scroll position back to currentView when user swipes manually
-  const handleScroll = () => {
-    if (isProgrammaticScroll.current) return;
-    
-    if (scrollContainerRef.current) {
-      const width = scrollContainerRef.current.clientWidth;
-      const scrollLeft = scrollContainerRef.current.scrollLeft;
-      const idx = Math.round(scrollLeft / width);
-      if (idx >= 0 && idx < views.length && views[idx] !== currentView) {
-        // Prevent useEffect from re-triggering programmatic scroll
-        isProgrammaticScroll.current = true;
-        setCurrentView(views[idx]);
-        setTimeout(() => {
-          isProgrammaticScroll.current = false;
-        }, 100);
+  const resetSwipe = useCallback(() => {
+    swipeGestureRef.current = null;
+    setSwipeOffset(0);
+  }, []);
+
+  const handleSwipeStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'touch' || cardDragActive) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-drag-handle="true"], button, a, input, textarea, select')) return;
+
+    suppressClickRef.current = false;
+    swipeGestureRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      axis: 'pending',
+    };
+  }, [cardDragActive]);
+
+  const handleSwipeMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = swipeGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId || cardDragActive) return;
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (gesture.axis === 'pending' && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= SWIPE_AXIS_SLOP) {
+      gesture.axis = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
+    }
+    if (gesture.axis !== 'horizontal') return;
+
+    if (event.cancelable) event.preventDefault();
+    const atStart = currentViewIndex === 0 && deltaX > 0;
+    const atEnd = currentViewIndex === views.length - 1 && deltaX < 0;
+    setSwipeOffset((atStart || atEnd) ? deltaX * 0.2 : deltaX);
+  }, [cardDragActive, currentViewIndex]);
+
+  const handleSwipeEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = swipeGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - gesture.startX;
+    if (gesture.axis === 'horizontal' && Math.abs(deltaX) >= SWIPE_COMMIT_DISTANCE && !cardDragActive) {
+      const nextIndex = deltaX < 0 ? currentViewIndex + 1 : currentViewIndex - 1;
+      const nextView = views[nextIndex];
+      if (nextView) {
+        suppressClickRef.current = true;
+        window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+        setCurrentView(nextView);
       }
     }
-  };
+    resetSwipe();
+  }, [cardDragActive, currentViewIndex, resetSwipe, setCurrentView]);
+
+  const handleClickCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!suppressClickRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClickRef.current = false;
+  }, []);
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-[#0a0a0a] text-foreground relative z-0">
@@ -118,28 +149,36 @@ const ViewContainer: React.FC = () => {
       <GlobalVoiceIndicator />
       <SyncStatusIndicator />
 
-      {/* Snap Container */}
       <div className="fixed top-2 right-4 text-[10px] font-mono text-muted-foreground/50 z-[100] pointer-events-none tracking-widest">
-        v2.4.0
+        v2.4.13
       </div>
 
-      <div 
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="absolute inset-0 z-10 flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      <div
+        data-testid="view-viewport"
+        className="absolute inset-0 z-10 overflow-hidden"
+        style={{ touchAction: 'pan-y' }}
+        onPointerDown={handleSwipeStart}
+        onPointerMove={handleSwipeMove}
+        onPointerUp={handleSwipeEnd}
+        onPointerCancel={resetSwipe}
+        onClickCapture={handleClickCapture}
       >
-        <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
-          <VoiceControlView />
-        </div>
-        <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
-          <ProjectsView />
-        </div>
-        <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
-          <BacklogView />
-        </div>
-        <div className="w-screen h-full shrink-0 snap-center overflow-y-auto no-scrollbar">
-          <SprintTimerView />
+        <div
+          className={`flex h-full ease-out ${swipeOffset === 0 ? 'transition-transform duration-300' : ''}`}
+          style={{ transform: `translate3d(calc(-${currentViewIndex * 100}vw + ${swipeOffset}px), 0, 0)` }}
+        >
+          <div className="h-full w-screen shrink-0 overflow-y-auto no-scrollbar" style={{ touchAction: 'pan-y' }}>
+            <VoiceControlView />
+          </div>
+          <div className="h-full w-screen shrink-0 overflow-y-auto no-scrollbar" style={{ touchAction: 'pan-y' }}>
+            <ProjectsView />
+          </div>
+          <div className="h-full w-screen shrink-0 overflow-y-auto no-scrollbar" style={{ touchAction: 'pan-y' }}>
+            <BacklogView />
+          </div>
+          <div className="h-full w-screen shrink-0 overflow-y-auto no-scrollbar" style={{ touchAction: 'pan-y' }}>
+            <SprintTimerView />
+          </div>
         </div>
       </div>
       
@@ -155,6 +194,29 @@ const ViewContainer: React.FC = () => {
 export default function App() {
   useEffect(() => {
     SyncManager.init();
+  }, []);
+
+  useEffect(() => {
+    const launchCover = document.getElementById('launch-cover');
+    if (!launchCover) return;
+
+    let secondFrame = 0;
+    let removalTimer = 0;
+    const removeLaunchCover = () => launchCover.remove();
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        launchCover.addEventListener('transitionend', removeLaunchCover, { once: true });
+        launchCover.classList.add('launch-cover--ready');
+        removalTimer = window.setTimeout(removeLaunchCover, 700);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      window.clearTimeout(removalTimer);
+      launchCover.removeEventListener('transitionend', removeLaunchCover);
+    };
   }, []);
 
   return <ViewContainer />;

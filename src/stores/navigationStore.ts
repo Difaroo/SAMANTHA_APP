@@ -5,6 +5,8 @@ export type ViewState = 'voice' | 'backlog' | 'projects' | 'timer';
 interface NavigationState {
   currentView: ViewState;
   setCurrentView: (view: ViewState) => void;
+  cardDragActive: boolean;
+  setCardDragActive: (active: boolean) => void;
   activeEpicId: string | null;
   setActiveEpicId: (id: string | null) => void;
   selectedEpicDetailId: string | null;
@@ -12,8 +14,10 @@ interface NavigationState {
 }
 
 export const useNavigationStore = create<NavigationState>((set) => ({
-  currentView: 'backlog', // Start on backlog by default
+  currentView: 'voice',
   setCurrentView: (view) => set({ currentView: view }),
+  cardDragActive: false,
+  setCardDragActive: (active) => set({ cardDragActive: active }),
   activeEpicId: null,
   setActiveEpicId: (id) => set(id ? { activeEpicId: id, currentView: 'timer' } : { activeEpicId: null }),
   selectedEpicDetailId: null,

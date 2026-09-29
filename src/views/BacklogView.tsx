@@ -3,7 +3,8 @@ import {
   DndContext, 
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent
@@ -20,15 +21,17 @@ import { useEntityStore, type Epic } from '../stores/entityStore';
 import { isEpicInNext, rankForIndex } from '../sync/contract';
 import { useNavigationStore } from '../stores/navigationStore';
 import { Play, GripVertical } from 'lucide-react';
+import { restrictToVerticalAxis } from '../dnd/modifiers';
 
-const SortableEpicCard: React.FC<{ epic: Epic; projectName: string; onGo: (id: string) => void; onSelect: (id: string) => void }> = ({ epic, projectName, onGo, onSelect }) => {
+const SortableEpicCard: React.FC<{ epic: Epic; projectName: string; projectColor: string; onGo: (id: string) => void; onSelect: (id: string) => void }> = ({ epic, projectName, projectColor, onGo, onSelect }) => {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
     transition,
-    isDragging
+    isDragging,
+    setActivatorNodeRef,
   } = useSortable({ id: epic.id });
 
   const style = {
@@ -47,17 +50,25 @@ const SortableEpicCard: React.FC<{ epic: Epic; projectName: string; onGo: (id: s
         isDragging ? 'border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] bg-white/10' : 'border-white/10 bg-white/5 hover:bg-white/10'
       } backdrop-blur-sm group transition-colors`}
     >
-      <div 
+      {/* Color bar */}
+      <div className="w-1 self-stretch rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: projectColor }} />
+
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
         {...attributes} 
         {...listeners}
+        aria-label={`Drag ${epic.title}`}
+        data-drag-handle="true"
         onClick={(e) => e.stopPropagation()}
-        className="flex items-center justify-center px-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-white"
+        style={{ touchAction: 'none' }}
+        className="flex min-h-11 min-w-11 items-center justify-center px-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-white"
       >
         <GripVertical size={20} />
-      </div>
+      </button>
       
       <div className="flex-1 px-4">
-        <div className="text-[10px] font-mono text-primary uppercase tracking-widest mb-1">
+        <div className="text-[10px] font-mono uppercase tracking-widest mb-1" style={{ color: projectColor }}>
           {projectName}
         </div>
         <h3 className="text-lg font-medium text-white mb-1 leading-tight">{epic.title}</h3>
@@ -82,9 +93,10 @@ const SortableEpicCard: React.FC<{ epic: Epic; projectName: string; onGo: (id: s
 
 export const BacklogView: React.FC = () => {
   const { epics, setEpics, projects, _hasHydrated } = useEntityStore();
-  const { setActiveEpicId, setSelectedEpicDetailId } = useNavigationStore();
+  const { setActiveEpicId, setSelectedEpicDetailId, setCardDragActive } = useNavigationStore();
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -104,6 +116,7 @@ export const BacklogView: React.FC = () => {
     .sort((a, b) => String(a.nextRank).localeCompare(String(b.nextRank)));
 
   const handleDragEnd = (event: DragEndEvent) => {
+    setCardDragActive(false);
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
@@ -126,25 +139,32 @@ export const BacklogView: React.FC = () => {
         <p className="text-muted-foreground">Drag to prioritize. Click for task detail. Press Play to initiate.</p>
       </header>
       
-      <div className="flex-1 overflow-y-auto pr-2 pb-20 no-scrollbar">
+      <div className="flex-1 overflow-y-auto pb-20 no-scrollbar">
         <DndContext 
           sensors={sensors}
           collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragStart={() => setCardDragActive(true)}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => setCardDragActive(false)}
         >
           <SortableContext 
             items={nextTasks.map(e => e.id)}
             strategy={verticalListSortingStrategy}
           >
-            {nextTasks.map(epic => (
-              <SortableEpicCard 
-                key={epic.id} 
-                epic={epic} 
-                projectName={projects.find(p => p.id === epic.projectId)?.name || 'Unknown Project'}
-                onGo={setActiveEpicId} 
-                onSelect={setSelectedEpicDetailId} 
-              />
-            ))}
+            {nextTasks.map(epic => {
+              const project = projects.find(p => p.id === epic.projectId);
+              return (
+                <SortableEpicCard
+                  key={epic.id}
+                  epic={epic}
+                  projectName={project?.name || 'Unknown Project'}
+                  projectColor={project?.color || '#6b7280'}
+                  onGo={setActiveEpicId}
+                  onSelect={setSelectedEpicDetailId}
+                />
+              );
+            })}
           </SortableContext>
         </DndContext>
       </div>

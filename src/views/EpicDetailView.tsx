@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useEntityStore, type Epic, type Project } from '../stores/entityStore';
 import { useNavigationStore } from '../stores/navigationStore';
 import { X, Edit2, Save } from 'lucide-react';
@@ -13,7 +13,9 @@ type TaskDetailDialogProps = {
 const TaskDetailDialog: React.FC<TaskDetailDialogProps> = ({ epic, project, onSave, onClose }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedEpic, setEditedEpic] = useState(epic);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const projectName = project?.name || 'Unknown Project';
+  const projectColor = project?.color || '#6b7280';
 
   const handleSave = () => {
     onSave(editedEpic);
@@ -25,17 +27,48 @@ const TaskDetailDialog: React.FC<TaskDetailDialogProps> = ({ epic, project, onSa
     setEditedEpic({ ...editedEpic, objectives, prompt: objectives.map((objective) => `- ${objective}`).join('\n') });
   };
 
+  const keepFocusedFieldVisible = useCallback(() => {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLElement) || !dialogRef.current?.contains(focused)) return;
+
+    const viewport = window.visualViewport;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+    const bounds = focused.getBoundingClientRect();
+    if (bounds.top < viewportTop + 24 || bounds.bottom > viewportBottom - 24) {
+      focused.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    }
+  }, []);
+
+  const scheduleFocusedFieldRecovery = useCallback(() => {
+    window.requestAnimationFrame(keepFocusedFieldVisible);
+    window.setTimeout(keepFocusedFieldVisible, 120);
+  }, [keepFocusedFieldVisible]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', scheduleFocusedFieldRecovery);
+    window.addEventListener('resize', scheduleFocusedFieldRecovery);
+    return () => {
+      viewport?.removeEventListener('resize', scheduleFocusedFieldRecovery);
+      window.removeEventListener('resize', scheduleFocusedFieldRecovery);
+    };
+  }, [isEditing, scheduleFocusedFieldRecovery]);
+
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Task detail"
-      className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-md flex flex-col p-6 animate-in fade-in slide-in-from-bottom-8 duration-300"
+      onFocusCapture={scheduleFocusedFieldRecovery}
+      className="fixed inset-0 z-[100] h-[100dvh] max-h-[100dvh] overflow-hidden bg-background/95 backdrop-blur-md flex flex-col p-6 animate-in fade-in slide-in-from-bottom-8 duration-300"
     >
-      <div className="max-w-3xl w-full mx-auto flex flex-col h-full">
+      <div className="max-w-3xl w-full mx-auto flex flex-col h-full min-h-0">
         <header className="flex justify-between items-start mb-8 pt-8">
           <div className="flex-1 mr-8">
-            <div className="text-xs font-mono text-primary uppercase tracking-widest mb-2">
+            <div className="text-xs font-mono uppercase tracking-widest mb-2" style={{ color: projectColor }}>
               Task detail · {projectName}
             </div>
             {isEditing ? (
@@ -77,11 +110,12 @@ const TaskDetailDialog: React.FC<TaskDetailDialogProps> = ({ epic, project, onSa
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto space-y-8 pb-20 no-scrollbar pr-2">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-8 pb-20 no-scrollbar pr-2">
           <section>
             <h3 className="text-sm font-medium text-white mb-2 uppercase tracking-wide border-b border-white/10 pb-2">Abstract</h3>
             {isEditing ? (
               <textarea
+                data-testid="task-description-field"
                 value={editedEpic.description}
                 onChange={e => setEditedEpic({ ...editedEpic, description: e.target.value })}
                 className="w-full h-32 text-lg text-white leading-relaxed bg-white/5 border border-primary/50 rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
@@ -97,10 +131,11 @@ const TaskDetailDialog: React.FC<TaskDetailDialogProps> = ({ epic, project, onSa
             <h3 className="text-sm font-medium text-white mb-4 uppercase tracking-wide border-b border-white/10 pb-2">Prompt & Outcomes</h3>
             {isEditing ? (
               <textarea
+                data-testid="task-outcomes-field"
                 value={editedEpic.objectives.join('\n')}
                 onChange={e => handleObjectivesChange(e.target.value)}
                 placeholder="Enter each outcome on a new line..."
-                className="w-full h-48 font-mono text-sm text-white bg-white/5 border border-primary/50 rounded-xl p-4 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                className="w-full h-[min(12rem,30dvh)] min-h-24 font-mono text-sm text-white bg-white/5 border border-primary/50 rounded-xl p-4 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               />
             ) : (
               <div className="p-6 bg-white/5 border border-white/10 rounded-xl font-mono text-sm shadow-inner">
