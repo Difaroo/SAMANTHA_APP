@@ -1,12 +1,12 @@
 # Samantha App User Manual
 
-**Applies to:** Samantha App 2.4.13
+**Applies to:** Samantha App 2.4.15
 
 ## Overview
 
 Samantha is an Android-first companion to PRISM. It provides Voice, Projects, Next, and Timer in one mobile interface. Project changes are available offline and synchronize with PRISM when connectivity returns.
 
-The installed web-app release is shown in the top-right corner. This manual describes version 2.4.13; use that label when reporting a defect so behavior can be matched to the correct source revision.
+The installed web-app release is shown in the top-right corner. This manual describes version 2.4.15; use that label when reporting a defect so behavior can be matched to the correct source revision.
 
 ## Navigation
 

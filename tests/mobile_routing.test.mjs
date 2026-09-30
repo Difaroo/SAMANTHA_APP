@@ -18,6 +18,13 @@ test('checked-in production env defines the canonical mobile routes', async () =
   assert.equal(verifyProductionEnv(env), true);
 });
 
+test('Android 10 keyboard resize is not double-applied by Capacitor SystemBars', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const viewport = html.match(/<meta\s+name=["']viewport["'][^>]*content=["']([^"']+)["']/i);
+  assert.ok(viewport, 'index.html must define the mobile viewport');
+  assert.doesNotMatch(viewport[1], /viewport-fit\s*=\s*cover/i);
+});
+
 test('compiled production routing accepts the canonical endpoints', () => {
   assert.equal(verifyCompiledRouting(productionBundle), true);
 });

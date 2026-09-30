@@ -68,7 +68,7 @@ test.describe('Navigation Control Flow', () => {
   });
 
   test('release version is visible in the app shell', async ({ page }) => {
-    await expect(page.getByText('v2.4.13', { exact: true })).toBeVisible();
+    await expect(page.getByText('v2.4.15', { exact: true })).toBeVisible();
   });
 
   test('launch cover yields to the painted app without leaving an overlay', async ({ page }) => {

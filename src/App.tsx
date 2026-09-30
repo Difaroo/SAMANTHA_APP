@@ -150,7 +150,7 @@ const ViewContainer: React.FC = () => {
       <SyncStatusIndicator />
 
       <div className="fixed top-2 right-4 text-[10px] font-mono text-muted-foreground/50 z-[100] pointer-events-none tracking-widest">
-        v2.4.13
+        v2.4.15
       </div>
 
       <div

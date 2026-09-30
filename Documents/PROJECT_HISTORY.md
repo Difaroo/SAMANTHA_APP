@@ -2,6 +2,14 @@
 
 This history records released outcomes. Dates use the Europe/London project timezone.
 
+## 2.4.15 - Huawei Keyboard Reliability
+
+**Date:** 2026-09-30
+**Purpose:** Keep task editing usable with the Android keyboard.
+
+- Prevents Capacitor SystemBars from double-applying the IME height on Android 10 with current WebView releases.
+- Keeps the focused task textarea inside the resized dialog viewport without changing task or prompt data.
+
 ## 2.4.13 - Swipe Navigation With Drag Isolation
 
 - Restores touch-only horizontal swipe navigation across Voice, Projects, Next, and Timer.
